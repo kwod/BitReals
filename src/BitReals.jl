@@ -3,13 +3,13 @@ module BitReals
 import Base: iterate, eltype, IteratorSize, show, isfinite, iszero, Rational, isone
 using Base: SizeUnknown, IsInfinite
 using Base.Iterators: flatten, cycle, take, peel
-export BitReal #, Ratio
+export BitReal
 
 struct BitReal <: Number
-    iterablebits
+    bits
 end
 
-iterate(br::BitReal, itr = br.iterablebits) = peel(itr)
+iterate(br::BitReal, bits = br.bits) = peel(bits)
 eltype(::Type{BitReal}) = Bool
 
 show(io::IO, br::BitReal) =
@@ -35,11 +35,25 @@ iterate(r::Ratio, (a, b) = (r.a, r.b)) =
 eltype(::Type{Ratio}) = Bool
 IteratorSize(::Type{Ratio}) = SizeUnknown()
 
+BitReal(x::Real) =
+    BitReal(
+        if isfinite(x)
+            flatten(
+                if iszero(x)
+                    ()
+                elseif x < 0
+                    (false, Ratio(one(x), -x))
+                else
+                    (true, Ratio(x, one(x)))
+                end)
+        end
+    )
+
 BitReal(r::Rational) =
     BitReal(
         if isfinite(r)
             flatten(
-                if r == 0
+                if iszero(r)
                     ()
                 elseif r < 0
                     (false, Ratio(r.den, -r.num))
@@ -49,37 +63,21 @@ BitReal(r::Rational) =
         end
     )
 
-
-BitReal(r::Real) =
-    BitReal(
-        if isfinite(r)
-            flatten(
-                if iszero(r)
-                    ()
-                elseif r < 0
-                    (false, Ratio(one(r), -r))
-                else
-                    (true, Ratio(r, one(r)))
-                end)
-        end
-    )
-
-
-isfinite(br::BitReal) = !isnothing(br.iterablebits)
-iszero(br::BitReal) = isempty(br.iterablebits)
+isfinite(br::BitReal) = !isnothing(br.bits)
+iszero(br::BitReal) = isempty(br.bits)
 
 function Rational(br::BitReal, maxitr = 64)
     isfinite(br) || return big(1//0)
     iszero(br) && return big(0//1)
-    sgn, itr = Iterators.peel(br)
+    sgn, bits = peel(br)
     function bite(v, b)
         lo, hi = v
         b ? lo .+= hi : hi .+= lo
         lo, hi
     end
-    itr = Iterators.take(itr, maxitr)
+    bits = take(bits, maxitr)
     init = ([big(0), big(1)], [big(1), big(0)])
-    lo, hi = reduce(bite, itr; init = init)
+    lo, hi = reduce(bite, bits; init = init)
     r = //((lo .+ hi)...)
     sgn ? r : -inv(r)
 end
