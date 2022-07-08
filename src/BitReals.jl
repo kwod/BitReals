@@ -3,7 +3,7 @@ module BitReals
 import Base: iterate, eltype, IteratorSize, show, isfinite, iszero, Rational, isone
 using Base: SizeUnknown, IsInfinite
 using Base.Iterators: flatten, cycle, take, peel
-export BitReal, Ratio
+export BitReal #, Ratio
 
 struct BitReal <: Number
     iterablebits
@@ -38,7 +38,7 @@ IteratorSize(::Type{Ratio}) = SizeUnknown()
 BitReal(r::Rational) =
     BitReal(
         if isfinite(r)
-            Iterators.flatten(
+            flatten(
                 if r == 0
                     ()
                 elseif r < 0
@@ -53,7 +53,7 @@ BitReal(r::Rational) =
 BitReal(r::Real) =
     BitReal(
         if isfinite(r)
-            Iterators.flatten(
+            flatten(
                 if iszero(r)
                     ()
                 elseif r < 0

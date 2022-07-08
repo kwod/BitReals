@@ -1,3 +1,3 @@
 # BitReals
 
-## Real numbers as streams of bits.  
+## Iterators yielding Bits as Real Numbers
