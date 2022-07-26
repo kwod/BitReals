@@ -1,6 +1,7 @@
 module BitReals
 
-import Base: iterate, eltype, IteratorSize, show, isfinite, iszero, Rational, isone
+import Base: iterate, eltype, IteratorSize, show, isinf, isempty, isfinite, zero, iszero, Rational,
+    one, isone
 using Base: SizeUnknown, IsInfinite
 using Base.Iterators: flatten, cycle, take, peel
 export BitReal
@@ -12,10 +13,20 @@ end
 iterate(br::BitReal, bits = br.bits) = peel(bits)
 eltype(::Type{BitReal}) = Bool
 
-show(io::IO, br::BitReal) =
-    isfinite(br) ?
-        print(io, '|', join((b ? '1' : '0') for b ∈ take(br, 64)), '|') :
+function show(io::IO, br::BitReal, m = 64)
+    if isinf(br)
         print(io, "∞")
+    else
+        cs = ['|']
+        while !isempty(br) & (m > 0)
+            bit, br = Iterators.peel(br)
+            push!(cs, bit ? '1' : '0')
+            m -= 1
+        end
+        push!(cs, isempty(br) ? '|' : '…')
+        join(io, cs)
+    end
+end
 
 BitReal() = BitReal(nothing)
 BitReal(s::String) = BitReal(c=='1' for c ∈ s)
@@ -25,15 +36,21 @@ struct Ratio{T}
     b::T
 end
 
-iterate(r::Ratio, (a, b) = (r.a, r.b)) =
-    if a ≠ b
+function iterate(r::Ratio, (a, b) = (r.a, r.b))
+    if !(a ≈ b)
         a > b ?
             (true, (a - b, b)) :
             (false, (a, b - a))
     end
+end
 
-eltype(::Type{Ratio}) = Bool
-IteratorSize(::Type{Ratio}) = SizeUnknown()
+function eltype(::Type{Ratio})
+    Bool
+end
+
+function IteratorSize(::Type{Ratio})
+    SizeUnknown()
+end
 
 BitReal(x::Real) =
     BitReal(
@@ -63,26 +80,31 @@ BitReal(r::Rational) =
         end
     )
 
-isfinite(br::BitReal) = !isnothing(br.bits)
-iszero(br::BitReal) = isempty(br.bits)
 
-function Rational(br::BitReal, maxitr = 64)
+isinf(br::BitReal) = isnothing(br.bits)
+isfinite(br::BitReal) = !isnothing(br.bits)
+isempty(br::BitReal) = isempty(br.bits)
+iszero(br::BitReal) = isempty(br)
+isone(br::BitReal) = Rational(br) == 1//1
+
+zero(::BitReal) = BitReal(())
+one(::BitReal) = BitReal((true))
+
+function Rational(br::BitReal, maxbits = 1_000_000)
     isfinite(br) || return big(1//0)
     iszero(br) && return big(0//1)
     sgn, bits = peel(br)
-    function bite(v, b)
-        lo, hi = v
-        b ? lo .+= hi : hi .+= lo
-        lo, hi
+    function bite(lo_hi, bit)
+        lo, hi = lo_hi
+        mid = lo .+ hi
+        bit ? (mid, hi) : (lo, mid)
     end
-    bits = take(bits, maxitr)
-    init = ([big(0), big(1)], [big(1), big(0)])
-    lo, hi = reduce(bite, bits; init = init)
+    bits = take(bits, maxbits)
+    lo_hi = big.([0, 1]), big.([1, 0])
+    lo, hi = reduce(bite, bits; init = lo_hi)
     r = //((lo .+ hi)...)
     sgn ? r : -inv(r)
 end
-
-isone(br::BitReal) = Rational(br) == 1//1
 
 BitReal(::Irrational{:φ}) = BitReal(flatten((true, cycle((true, false)))))
 
